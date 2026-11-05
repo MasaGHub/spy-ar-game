@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>スパイゲーム・AR面トラップ実験 2</title>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;overflow:hidden;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;background:#08111b;color:#fff}
+#hud{position:fixed;inset:0;z-index:9999;pointer-events:none;padding:max(16px,env(safe-area-inset-top)) 16px max(18px,env(safe-area-inset-bottom));display:flex;flex-direction:column;justify-content:space-between}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}.tag{border:1px solid #a9d9fb7c;background:#0d2435ce;padding:10px 12px;border-radius:9px;backdrop-filter:blur(8px);font-weight:750;font-size:13px}.lives{color:#ff6b7b;font-size:19px;letter-spacing:2px}
+.center{align-self:center;display:flex;flex-direction:column;gap:8px;text-align:center}.status{background:#07131fdc;border-radius:12px;padding:10px 13px;border:1px solid #ffffff4a;line-height:1.5;font-size:13px}.status b{color:#a5f3fc}.count{font-size:22px;font-weight:850;color:#fd6b6b;text-shadow:0 0 13px #ff2222}
+.bottom{display:flex;gap:10px;pointer-events:auto}button{appearance:none;border:1px solid #7dd3fc;background:#125473df;color:#fff;min-height:52px;border-radius:14px;font-size:16px;font-weight:800;flex:1}button:active{background:#197dac}button.secondary{border-color:#64748b;background:#1f2937df;flex:.6}
+#instructions{position:fixed;inset:0;z-index:10002;background:#091727ee;display:flex;align-items:center;justify-content:center;padding:25px}
+.panel{max-width:410px;background:#172b41;border:1px solid #5f819c;border-radius:18px;padding:25px;line-height:1.8;box-shadow:0 10px 40px #0008}.panel h2{margin:0 0 8px}.panel p{margin:0 0 12px;font-size:14px;color:#d4e3f0}.panel button{width:100%;margin-top:14px}.note{font-size:12px!important;color:#9cb7ce!important}
+</style>
+</head>
+<body>
+<div id="instructions"><div class="panel"><h2>AR面トラップ実験 ②</h2><p>この版は赤い面が<b>HIROマーカーを基準に</b>立体表示されます。</p><p>① 別の画面や紙にHIROマーカーを表示しておく<br>② iPhoneのSafariで本ページをHTTPSで開く<br>③ カメラを許可してマーカーに向ける<br>④「探索」を押すと3秒間だけ赤い面が出現</p><p class="note">※床から100cmという実寸設定や接触判定はまだありません。マーカーが画面外に出ると追跡できません。</p><button id="start">カメラ実験を開始</button></div></div>
+<div id="hud">
+  <div class="top"><div class="tag">MISSION 01 / AR実験</div><div class="tag lives" id="lives">♥♥♥</div></div>
+  <div class="center"><div class="status" id="status">まずHIROマーカーをカメラで探してください</div><div class="count" id="count"></div></div>
+  <div class="bottom"><button id="scan">探索（3秒表示）</button><button id="hit" class="secondary">被弾テスト</button></div>
+</div>
+<a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="alpha: true; antialias: true; colorManagement: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+  <a-marker id="hiroMarker" preset="hiro" smooth="true" smooth-count="5" smooth-tolerance="0.01" smooth-threshold="2">
+    <!-- This is a DEMO box sized in marker-relative coordinates, not real centimeters. -->
+    <a-entity id="trap" visible="false">
+      <a-box position="0 0.38 0" width="2.0" height="0.76" depth="1.5" material="color: #ff263e; opacity: 0.30; transparent: true; side: double; depthWrite: false"></a-box>
+      <a-box position="0 0.76 0" width="2.0" height="0.012" depth="1.5" material="color: #ff5570; opacity: 0.6; transparent: true; side: double; depthWrite: false"></a-box>
+      <a-box position="0 0.38 0" width="2.0" height="0.76" depth="1.5" material="color: #ff0000; wireframe: true; opacity: 0.7; transparent: true; depthWrite: false"></a-box>
+    </a-entity>
+  </a-marker>
+  <a-entity camera></a-entity>
+</a-scene>
+<script>
+(function(){
+  const trap=document.querySelector('#trap');
+  const marker=document.querySelector('#hiroMarker');
+  const status=document.querySelector('#status');
+  const count=document.querySelector('#count');
+  const start=document.querySelector('#start');
+  let scanTimer=null, countdownTimer=null, remaining=0, lives=3, visible=false;
+  start.addEventListener('click',()=>{document.getElementById('instructions').style.display='none';});
+  function refreshStatus(){
+    const recognized = marker.object3D.visible;
+    status.innerHTML=recognized ? '<b>マーカー認識中</b>：iPhoneを少し動かして見え方を確認' : 'HIROマーカーを映してください（見失うと表示も消えます）';
+  }
+  marker.addEventListener('markerFound',refreshStatus);
+  marker.addEventListener('markerLost',refreshStatus);
+  function hide(){visible=false;trap.setAttribute('visible',false);count.textContent='';clearInterval(countdownTimer);countdownTimer=null;}
+  document.getElementById('scan').addEventListener('click',()=>{
+    clearTimeout(scanTimer);clearInterval(countdownTimer);
+    visible=true;remaining=3;
+    trap.setAttribute('visible',true);
+    count.textContent='可視化：3秒';
+    countdownTimer=setInterval(()=>{remaining--;if(remaining>0){count.textContent='可視化：'+remaining+'秒';}else{hide();}},1000);
+    scanTimer=setTimeout(hide,3100);
+  });
+  document.getElementById('hit').addEventListener('click',()=>{
+    lives=Math.max(0,lives-1);
+    document.getElementById('lives').textContent='♥'.repeat(lives)+'♡'.repeat(3-lives);
+    if(lives===0){setTimeout(()=>{lives=3;document.getElementById('lives').textContent='♥♥♥';},1500);}
+  });
+  setTimeout(refreshStatus,1800);
+})();
+</script>
+</body>
+</html>
